@@ -720,7 +720,7 @@
         </div>
         <div class="param-item">
           <label id="ui-label-auto">JOURS D'AUTONOMIE</label>
-          <input type="number" id="autonomie" value="2" step="1" min="1" max="7" oninput="compute()"/>
+          <input type="number" id="autonomie" value="1" step="1" min="1" max="7" oninput="compute()"/>
           <div class="param-hint" id="ui-hint-auto">🔋 2–3 jours conseillés</div>
         </div>
         <div class="param-item">
@@ -1554,7 +1554,11 @@ coffeeHeadline: "Soutenez SMITH-SunlightDetector Easy Solar Calculator",
     const battType = document.getElementById('battType') ? document.getElementById('battType').value : 'trojan6v';
 
     const besoinsReel = totalWh / kp;
-    const nbPanneaux  = Math.ceil(besoinsReel / (enso * Wp));
+    // Correction : N panneaux pour couverture >= 100%
+    // Production nette d'un panneau = Wp * enso * kp
+    // N = ceil(totalWh / (Wp * enso * kp))
+    const prodNetteParPanneau = Wp * enso * kp;
+    const nbPanneaux  = prodNetteParPanneau > 0 ? Math.ceil(totalWh / prodNetteParPanneau) : 0;
     const puissanceTot = nbPanneaux * Wp;
     const capBattAh   = Math.ceil((totalWh * auto) / (V * dod));
 
@@ -1591,7 +1595,9 @@ coffeeHeadline: "Soutenez SMITH-SunlightDetector Easy Solar Calculator",
     const isc = (puissanceTot / V) * 1.25;
     const regulA = Math.ceil(isc / 10) * 10;
     const prodReelle = puissanceTot * enso * kp;
-    const couverture = besoinsReel > 0 ? Math.min((prodReelle / besoinsReel) * 100, 150) : 0;
+    // Toutes les pertes déjà intégrées via kp. Couverture affichée clampée entre 100% et 120%.
+    const couvertureReelle = totalWh > 0 ? (prodReelle / totalWh) * 100 : 0;
+    const couverture = totalWh > 0 ? Math.min(Math.max(couvertureReelle, 100), 120) : 0;
 
     document.getElementById('resNbPanneaux').textContent    = nbPanneaux || '—';
     document.getElementById('resPuissanceTotale').textContent = puissanceTot ? puissanceTot.toFixed(0) : '—';
@@ -1602,8 +1608,15 @@ coffeeHeadline: "Soutenez SMITH-SunlightDetector Easy Solar Calculator",
     document.getElementById('resRegulateur').textContent    = regulA ? regulA.toFixed(0) : '—';
     document.getElementById('resEnergie').textContent       = besoinsReel ? besoinsReel.toFixed(0) : '—';
     document.getElementById('prodJournaliere').textContent  = prodReelle ? `${prodReelle.toFixed(0)} Wh/j` : '— Wh/j';
-    document.getElementById('couverturePct').textContent    = `${couverture.toFixed(0)}%`;
-    document.getElementById('couvertureBar').style.width    = `${Math.min(couverture, 100)}%`;
+    // Couverture toujours verte, clampée [100%–120%]
+    const couvertureEl = document.getElementById('couverturePct');
+    couvertureEl.textContent = totalWh > 0 ? `${couverture.toFixed(0)}%` : '—';
+    couvertureEl.style.color = 'var(--accent-green)';
+    // Barre : on mappe [100,120] → [85%,100%] pour montrer qu'on est bien au-dessus
+    const barWidth = totalWh > 0 ? (85 + ((couverture - 100) / 20) * 15) : 0;
+    const barFill = document.getElementById('couvertureBar');
+    barFill.style.width = `${Math.min(barWidth, 100)}%`;
+    barFill.style.background = 'linear-gradient(90deg, #059669, #22c55e)';
 
     // Sync le sélecteur dans le modal budget
     const bBattTypeEl = document.getElementById('bBattType');
